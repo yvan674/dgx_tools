@@ -15,13 +15,13 @@ from datetime import datetime
 
 def main():
     # Capture stream from running the scontrol command
-    stream = run(["scontrol", "show", "job"], capture_output=True,
+    results = run(["scontrol", "show", "job"], capture_output=True,
                  text=True)
 
     jobs = []
     current_job = []
     # Parse the output into a list of lines
-    for line in stream.stdout.split("\n"):
+    for line in results.stdout.split("\n"):
         if not line == "":
             current_job.append(line)
         else:
