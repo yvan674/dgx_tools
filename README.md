@@ -40,5 +40,16 @@ Run `sgpu.py` using python
 python sgpu.py
 ```
 
+## Container Inspect
+Inspect docker containers and view how many GPUs are assigned to them and which user started them.
+
+### Usage
+Run `container_inspect.py` using python
+
+```bash
+python container_inspect.py
+```
+
+
 ## Attributions
 This work uses code from [asciichartpy](https://pypi.org/project/asciichartpy/), licensed under the MIT license.
