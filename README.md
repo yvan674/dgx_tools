@@ -10,7 +10,8 @@ It can be installed with:
 
 ```bash
 pip install GPUtil
-``` 
+```
+
 ### Usage
 Run `gpu_graph.py` using python
 
@@ -42,6 +43,14 @@ python sgpu.py
 
 ## Container Inspect
 Inspect docker containers and view how many GPUs are assigned to them and which user started them.
+
+### Dependencies
+The python package [GPUtil](https://pypi.org/project/GPUtil/) is required to show GPU information. 
+It can be installed with:
+
+```bash
+pip install GPUtil
+```
 
 ### Usage
 Run `container_inspect.py` using python
