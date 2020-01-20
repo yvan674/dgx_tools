@@ -1,7 +1,7 @@
-"""GPU Inspect
+"""Container Inspect
 
-Inspects GPU Usage and shows which users and docker containers are using
-which GPUs.
+Inspects docker containers and which user started which docker container and
+the resource utilization of each container.
 
 Author:
     Yvan Satyawan <y_satyawan@hotmail.com>
