@@ -2,7 +2,7 @@
 ## GPU Graph
 Graphically shows GPU usage through the use of line and bar plots on a given machine.
 
-![Screenshot of GPU Graph in use](./screenshot.png)
+![Screenshot of GPU Graph in use](media/screenshot.png)
 
 ### Dependencies
 The python package [GPUtil](https://pypi.org/project/GPUtil/) is required. 
