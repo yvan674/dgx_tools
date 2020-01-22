@@ -44,43 +44,44 @@ def main():
     # Extract only the keys that we care about
     parsed_jobs = []
     for job in raw_job_dicts:
-        temp = {}
-        attributes = [
-            'JobId',
-            'JobName',
-            'UserId',
-            'RunTime',
-            'StartTime',
-            'NumCPUs',
-            'MinMemoryNode',
-            'WorkDir',
-            'Gres'
-        ]
-        for attribute in attributes:
-            temp[attribute] = job[attribute]
+        if job['JobState'] == "RUNNING":
+            temp = {}
+            attributes = [
+                'JobId',
+                'JobName',
+                'UserId',
+                'RunTime',
+                'StartTime',
+                'NumCPUs',
+                'MinMemoryNode',
+                'WorkDir',
+                'Gres'
+            ]
+            for attribute in attributes:
+                temp[attribute] = job[attribute]
 
-        # Parsed the raw dictionary output to more human readable strings
-        temp['UserId'] = temp['UserId'].split("(")[0]
+            # Parsed the raw dictionary output to more human readable strings
+            temp['UserId'] = temp['UserId'].split("(")[0]
 
-        # Change elapsed time to easier to read format
-        elapsed_time = temp['RunTime'].split('-')
-        if len(elapsed_time) > 1:
-            temp['RunTime'] = "{} days {}".format(elapsed_time[0],
-                                                  elapsed_time[1])
+            # Change elapsed time to easier to read format
+            elapsed_time = temp['RunTime'].split('-')
+            if len(elapsed_time) > 1:
+                temp['RunTime'] = "{} days {}".format(elapsed_time[0],
+                                                      elapsed_time[1])
 
-        # Do the same for the start time
-        temp['StartTime'] = datetime.strptime(
-            temp['StartTime'], '%Y-%m-%dT%H:%M:%S'
-        ).strftime('%d %b - %H:%M:%S')
+            # Do the same for the start time
+            temp['StartTime'] = datetime.strptime(
+                temp['StartTime'], '%Y-%m-%dT%H:%M:%S'
+            ).strftime('%d %b - %H:%M:%S')
 
-        # Count GPUs used
-        if not '(null)' in temp['Gres']:
-            temp['gpu'] = temp['Gres'].split(':')[1]
-        else:
-            temp['gpu'] = '0'
-        del temp['Gres']
+            # Count GPUs used
+            if not '(null)' in temp['Gres']:
+                temp['gpu'] = temp['Gres'].split(':')[1]
+            else:
+                temp['gpu'] = '0'
+            del temp['Gres']
 
-        parsed_jobs.append(temp)
+            parsed_jobs.append(temp)
 
     # Now output the values
     print("{}{:<5} {:<7} {:<6} {:>18}   {:>19} {:>5} {:>5} {:>5}{}".format(
