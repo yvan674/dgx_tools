@@ -84,16 +84,19 @@ def main():
             parsed_jobs.append(temp)
 
     # Now output the values
-    print("{}{:<5} {:<7} {:<6} {:>18}   {:>19} {:>5} {:>5} {:>5}{}".format(
-        '\033[47;30m', 'JobId', 'JobName', 'UserId', 'Elapsed Time',
-        'Start Time', 'CPUs', 'Mem', 'GPUs', '\033[49;39m'
-    ))
+    header = "{:<5.5} {:<7.7} {:<6.6} {:>18.18}   {:>19.19} {:>5.5} {:>5.5} " \
+             "{:>5.5}"
+    print('\033[47;30m'
+          + header.format('JobId', 'JobName', 'UserId',
+                                       'Elapsed Time', 'Start Time', 'CPUs',
+                                       'Mem', 'GPUs')
+          + '\033[49;39m')
 
     cpu_remaining = 80
     mem_remaining = 508.
     gpu_remaining = 8
     for job in parsed_jobs:
-        print("{:<5} {:<7} {:<6} {:>18}   {:>19} {:>5} {:>5} {:>5}".format(
+        print(header.format(
             job['JobId'], job['JobName'], job['UserId'], job['RunTime'],
             job['StartTime'], job['NumCPUs'], job['MinMemoryNode'], job['gpu']
         ))
