@@ -11,11 +11,9 @@ Created on:
 """
 from curses import newwin, KEY_RESIZE, doupdate
 import curses
-from datetime import datetime, timedelta
 from time import sleep
 import GPUtil
 from math import ceil, floor
-import sys
 import argparse
 
 
@@ -27,6 +25,21 @@ def parse_argument():
                         help='update interval in seconds')
 
     return parser.parse_args()
+
+
+def read_keys(stdscr):
+    """Reads all keys pressed between calls.
+
+    :returns: All keys pressed as their integer values.
+    :rtype: list
+    """
+    keys = []
+    while True:
+        k = stdscr.getch()
+        if k != -1:
+            keys.append(k)
+        else:
+            return keys
 
 
 def plot(series: list or tuple, cfg: dict = None):
@@ -86,89 +99,29 @@ def plot(series: list or tuple, cfg: dict = None):
     return [''.join(row) for row in result]
 
 
-def main(stdscr, update_interval: float = 1.):
-    # Clear screen
-    stdscr.clear()
-    stdscr.nodelay(True)
+def redraw_windows(gpus, sizes):
+    """Redraws windows according to screen sizes given
 
-    last_screen_size = (0, 0)
-
-    last_update = datetime.now()
-    gpus = GPUtil.getGPUs()
-
-    if len(gpus) == 0:
-        raise Exception("No GPUs found")
-
-    val_utilizations = []
+    :param gpus: list of gpu objects returned by GPUtil
+    :param sizes: list of dictionaries containing the sizes of each window
+    :type sizes: list
+    :type gpus: list
+    :return: tuple containing (list of curses window objects, val_utilizations)
+    :rtype: tuple
+    """
     windows = []
-    sizes = -1
+    val_utilizations = []
+    for i, size in enumerate(sizes):
+        win = newwin(size['nlines'], size['ncols'],
+                     size['begin_y'], size['begin_x'])
+        win.clear()
+        win.border()
+        win.addstr(0, 2, "GPU {}: {}".format(i, gpus[i].name))
+        win.noutrefresh()
+        windows.append(win)
+        val_utilizations.append([0, 0])
 
-    while True:
-        # Handle window resize
-        if stdscr.getmaxyx() != last_screen_size:
-            last_screen_size = stdscr.getmaxyx()
-            stdscr.clear()
-            # calculate windows
-            sizes = calculate_sizes(stdscr, len(gpus))
-            windows = []
-            if sizes == -1:
-                # This is an error meaning that the terminal window is too small
-                stdscr.clear()
-                h, w = stdscr.getmaxyx()
-                error_string = ['Window is too small.',
-                                'Please make it bigger',
-                                'or press "Q" to quit.']
-                assert w > 21, 'Terminal window is too small.'
-                for i in range(len(error_string)):
-                    stdscr.addstr(i, 0, error_string[i])
-                stdscr.refresh()
-                stdscr.nodelay(False)
-                key = stdscr.getkey()
-                if key == 'q':
-                    sys.exit()
-                elif key == KEY_RESIZE:
-                    stdscr.nodelay(True)
-                    continue
-            else:
-                for i in range(len(gpus)):
-                    win = newwin(sizes[i]['nlines'], sizes[i]['ncols'],
-                                 sizes[i]['begin_y'], sizes[i]['begin_x'])
-                    win.clear()
-                    win.border()
-                    win.addstr(0, 2, "GPU {}: {}".format(i, gpus[i].name))
-                    win.noutrefresh()
-                    windows.append(win)
-                    val_utilizations.append([0, 0])
-
-        if datetime.now() - last_update > timedelta(seconds=update_interval) \
-                and sizes != -1:
-            gpus = GPUtil.getGPUs()
-            for i in range(len(gpus)):
-                # Get utilizations
-                val_utilizations[i].append(gpus[i].load * 100)
-
-                # Create plot for GPU utilization
-                util_window = windows[i].derwin(sizes[i]['nlines'] - 4,
-                                                sizes[i]['ncols'] - 9,
-                                                2,
-                                                2)
-
-                val_utilizations[i] = draw_utilization_plot(util_window,
-                                                            val_utilizations[i])
-
-                # Create bar chart for memory utilization
-                mem_window = windows[i].derwin(
-                    sizes[i]['nlines'] - 2, 5, 2, sizes[i]['ncols'] - 7)
-
-                draw_bar_chart(mem_window, gpus[i])
-
-                # Add borders a gain and put the window title
-                windows[i].border()
-                windows[i].addstr(0, 2, "GPU {}: {}".format(i, gpus[i].name))
-                windows[i].noutrefresh()
-            last_update = datetime.now()
-            doupdate()
-        sleep(update_interval / 2)
+    return windows, val_utilizations
 
 
 def draw_utilization_plot(window, values: list) -> list:
@@ -195,26 +148,28 @@ def draw_utilization_plot(window, values: list) -> list:
     return values
 
 
-def draw_bar_chart(window, gpu: GPUtil.GPUtil.GPU):
+def draw_memory_chart(window, gpu_total: float or int, gpu_usage: float or int):
     """Draws a bar chart.
 
     Args:
         window: Window to draw the chart in
-        gpu: The GPU object to draw a memory bar chart of.
+        gpu_total: The total memory a GPU has.
+        gpu_usage: The total memory currently being used on the GPU
     """
-    window.clear()
     h, w = window.getmaxyx()
-    total = gpu.memoryTotal
-    value = gpu.memoryUsed
+
+    # Clear out rows
+    for i in range(h - 3, -1, -1):
+        window.addstr(i, 0, ' ' * w)
 
     # Calculate number of blocks to use. Each row can either be 1 or 2 blocks.
-    blocks = round(value / total * (h + h - 2))
+    blocks = round(gpu_usage / gpu_total * (h + h - 2))
     # If this requires a half block, the value will be odd
     full_rows = floor(blocks / 2)
     half_row = False if blocks % 2 == 0 else True
 
     # Draw the label
-    value = '{:5.0f}'.format(value)
+    value = '{:5.0f}'.format(gpu_usage)
     # First, center it
     start_pos = int((w / 2)) - int((len(value) / 2))
     window.addstr(h - 2, start_pos, value)
@@ -246,7 +201,7 @@ def calculate_sizes(stdscr, num_gpus: int) -> list or int:
     out_dict = []
     h, w = stdscr.getmaxyx()
     w -= 1
-    h -= 1
+    h -= 2
 
     # Figure out appropriate layout
     min_height = 10
@@ -277,6 +232,88 @@ def calculate_sizes(stdscr, num_gpus: int) -> list or int:
     return out_dict
 
 
+def main(stdscr, update_interval: float = 1.):
+    # Clear screen
+    stdscr.clear()
+    stdscr.nodelay(True)
+
+    sleep_interval = update_interval / 2
+
+    gpus = GPUtil.getGPUs()
+
+    if len(gpus) == 0:
+        raise Exception("No GPUs found")
+
+    val_utilizations = []
+    mem_utilizations = [{'gpu_total': gpu.memoryTotal,
+                         'gpu_usage': gpu.memoryUsed}
+                        for gpu in gpus]
+    windows = []
+    sizes = calculate_sizes(stdscr, len(gpus))
+    redraw = True
+
+    while True:
+        # Refresh
+        keys = read_keys(stdscr)
+        # Case by case for each key option
+        if ord('q') in keys:
+            return
+
+        # Handle window resize
+        if KEY_RESIZE in keys or sizes == -1:
+            stdscr.clear()
+            sizes = calculate_sizes(stdscr, len(gpus))
+
+            # calculate_sizes has returned an error meaning the window
+            # size is to small
+            if sizes == -1:
+                h, w = stdscr.getmaxyx()
+                assert w > 21, 'Terminal window is too small.'
+
+                error_string = ['Window is too small.',
+                                'Please make it bigger',
+                                'or press "Q" to quit.']
+                for i in range(len(error_string)):
+                    stdscr.addstr(i, 0, error_string[i])
+                stdscr.refresh()
+                redraw = False
+            else:
+                redraw = True
+
+            sleep(sleep_interval)
+            continue
+
+        if redraw:
+            windows, val_utilizations = redraw_windows(gpus, sizes)
+            redraw = False
+
+        # Now run the plotting and stuff
+        gpus = GPUtil.getGPUs()
+        for i, gpu in enumerate(gpus):
+            # Get utilizations
+            val_utilizations[i].append(gpu.load * 100)
+            mem_utilizations[i]['gpu_usage'] = gpu.memoryUsed
+
+            # Create plot for GPU utilization
+            util_window = windows[i].derwin(sizes[i]['nlines'] - 4,
+                                            sizes[i]['ncols'] - 9,
+                                            2,
+                                            2)
+
+            val_utilizations[i] = draw_utilization_plot(util_window,
+                                                        val_utilizations[i])
+
+            # Create bar chart for memory utilization
+            mem_window = windows[i].derwin(
+                sizes[i]['nlines'] - 2, 5, 2, sizes[i]['ncols'] - 7
+            )
+            draw_memory_chart(mem_window, **mem_utilizations[i])
+            # windows[i].noutrefresh()
+        #
+        doupdate()
+        sleep(sleep_interval)
+
+
 if __name__ == '__main__':
     args = parse_argument()
     try:
@@ -285,21 +322,23 @@ if __name__ == '__main__':
         curses.noecho()
         curses.cbreak()
         stdscr.keypad(1)
+        curses.curs_set(0)
 
         try:
             curses.start_color()
-        except:
+        except curses.error:
             pass
         if args.interval:
             main(stdscr, args.interval)
         else:
             main(stdscr)
-    except KeyboardInterrupt:
-        pass
     finally:
         # Set everything back to normal
         if 'stdscr' in locals():
+            stdscr.clear()
+            stdscr.refresh()
             stdscr.keypad(0)
-            curses.echo()
-            curses.nocbreak()
-            curses.endwin()
+        curses.curs_set(1)
+        curses.echo()
+        curses.nocbreak()
+        curses.endwin()
