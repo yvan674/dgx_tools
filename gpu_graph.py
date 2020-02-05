@@ -15,6 +15,7 @@ import GPUtil
 from math import ceil, floor
 import argparse
 from threading import Timer
+from sys import exit
 
 
 def parse_argument():
@@ -56,12 +57,14 @@ class GpuGraph:
         self.calculate_sizes()
 
         self.redraw = True
+        self.cont = True
 
     def run(self):
         # Clear screen
         self.stdscr.clear()
         self.stdscr.nodelay(True)
-        while True:
+        self.mainloop()
+        while self.cont:
             t = Timer(self.interval, self.mainloop)
             t.run()
 
@@ -69,6 +72,7 @@ class GpuGraph:
         keys = self.read_keys()
         # Case by case for each key option
         if ord('q') in keys:
+            self.cont = False
             return
 
         # Handle window resize
@@ -350,7 +354,8 @@ if __name__ == '__main__':
         else:
             graph = GpuGraph(stdscr)
         graph.run()
-
+    except KeyboardInterrupt:
+        exit(0)
     finally:
         # Set everything back to normal
         if 'stdscr' in locals():

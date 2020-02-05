@@ -15,8 +15,7 @@ from datetime import datetime
 
 def main():
     # Capture stream from running the scontrol command
-    results = run(["scontrol", "show", "job"], capture_output=True,
-                 text=True)
+    results = run(["scontrol", "show", "job"], capture_output=True, text=True)
 
     jobs = []
     current_job = []
@@ -75,7 +74,7 @@ def main():
             ).strftime('%d %b - %H:%M:%S')
 
             # Count GPUs used
-            if not '(null)' in temp['Gres']:
+            if '(null)' not in temp['Gres']:
                 temp['gpu'] = temp['Gres'].split(':')[1]
             else:
                 temp['gpu'] = '0'
@@ -87,9 +86,8 @@ def main():
     header = "{:<5.5} {:<7.7} {:<6.6} {:>18.18}   {:>19.19} {:>5.5} {:>5.5} " \
              "{:>5.5}"
     print('\033[47;30m'
-          + header.format('JobId', 'JobName', 'UserId',
-                                       'Elapsed Time', 'Start Time', 'CPUs',
-                                       'Mem', 'GPUs')
+          + header.format('JobId', 'JobName', 'UserId', 'Elapsed Time',
+                          'Start Time', 'CPUs', 'Mem', 'GPUs')
           + '\033[49;39m')
 
     cpu_remaining = 80
