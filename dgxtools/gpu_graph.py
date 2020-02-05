@@ -11,11 +11,11 @@ Created on:
 """
 from curses import newwin, KEY_RESIZE, doupdate
 import curses
-import GPUtil
 from math import ceil, floor
 import argparse
 from threading import Timer
 from sys import exit
+from .gpu import getGPUs
 
 
 def parse_argument():
@@ -44,14 +44,14 @@ class GpuGraph:
         """
         self.stdscr = stdscr
         self.interval = interval
-        self.gpus = GPUtil.getGPUs()
+        self.gpus = getGPUs()
         self.num_gpus = len(self.gpus)
         assert self.num_gpus > 0, "No GPUs found"
 
         self.val_utilizations = []
         self.mem_utilizations = [{'gpu_total': gpu.memoryTotal,
                                   'gpu_usage': gpu.memoryUsed}
-                                  for gpu in self.gpus]
+                                 for gpu in self.gpus]
         self.windows = []
         self.sizes = None
         self.calculate_sizes()
@@ -85,7 +85,7 @@ class GpuGraph:
             self.redraw = False
 
         # Now run the plotting and stuff
-        self.gpus = GPUtil.getGPUs()
+        self.gpus = getGPUs()
         for i in range(self.num_gpus):
             # Get utilizations
             self.val_utilizations[i].append(self.gpus[i].load * 100)
@@ -119,15 +119,15 @@ class GpuGraph:
         # calculate_sizes has returned an error meaning the window
         # size is to small
         if self.sizes == -1:
-            h, w = stdscr.getmaxyx()
+            h, w = self.stdscr.getmaxyx()
             assert w > 21, 'Terminal window is too small.'
 
             error_string = ['Window is too small.',
                             'Please make it bigger',
                             'or press "Q" to quit.']
             for i in range(len(error_string)):
-                stdscr.addstr(i, 0, error_string[i])
-            stdscr.refresh()
+                self.stdscr.addstr(i, 0, error_string[i])
+            self.stdscr.refresh()
             self.redraw = False
         else:
             self.redraw = True
@@ -248,7 +248,8 @@ class GpuGraph:
         gpu_usage = self.mem_utilizations[i]['gpu_usage']
         gpu_total = self.mem_utilizations[i]['gpu_total']
 
-        # Calculate number of blocks to use. Each row can either be 1 or 2 blocks.
+        # Calculate number of blocks to use. Each row can either be 1 or 2
+        # blocks.
         blocks = round(gpu_usage / gpu_total * (h + h - 2))
         # If this requires a half block, the value will be odd
         full_rows = floor(blocks / 2)
@@ -276,14 +277,14 @@ class GpuGraph:
         """Calculate appropriate plot sizes.
 
         Calculates the sizes that should be appropriate to show plots. If the
-        terminal window is large enough, it uses multiple columns. It returns the
-        boxes for each GPU window. This uses a partioning algorithm,
-        but non-recursively does the partioning.
+        terminal window is large enough, it uses multiple columns. It returns
+        the boxes for each GPU window. This uses a partioning algorithm, but
+        non-recursively does the partioning.
 
         Returns:
             list or int: A list of dictionaries containing 'nlines', 'ncols',
-                'begin_y', and 'begin_x' for each window object that corresponds to
-                each GPU.
+                'begin_y', and 'begin_x' for each window object that corresponds
+                to each GPU.
         """
         sizes = []
         h, w = self.stdscr.getmaxyx()
@@ -328,7 +329,7 @@ class GpuGraph:
             y = (row * height) + y_pad
 
             sizes.append({'nlines': height, 'ncols': width, 'begin_y': y,
-                             'begin_x': x})
+                          'begin_x': x})
 
         self.sizes = sizes
 

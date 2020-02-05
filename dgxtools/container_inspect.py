@@ -11,12 +11,7 @@ Created on:
 """
 from subprocess import check_output
 import json
-try:
-    import GPUtil
-except ImportError:
-    print("Warning: GPUtil not found. GPU information will not be displayed."
-          "\n")
-    GPUtil = None
+from .gpu import getGPUs
 
 
 def get_docker_ids():
@@ -57,6 +52,7 @@ def get_user(mounts):
 
     # If we've gone through everything and still haven't found the user:
     return "Unknown"
+
 
 def get_gpus(env, gpu_list):
     """Gets GPU IDs given the GPU UUIDs.
@@ -114,27 +110,23 @@ def inspect_containers(container_ids, gpu_list):
     :rtype: list
     """
     out_list = []
-    for id in container_ids:
-        info = {}
-        info['ID'] = id
-
-        inspection = check_output(["docker", "inspect", id]).decode('ascii')
+    for cont_id in container_ids:
+        inspection = check_output(["docker", "inspect",
+                                   cont_id]).decode('ascii')
         inspection = json.loads(inspection)[0]
 
-        info['Name'] = inspection['Name'][1:]
-        info['CpusUsed'] = inspection['HostConfig']['CpusetCpus']
-        info['CpuCount'] = count_cpus(info['CpusUsed'])
+        gpus_used, gpu_count = get_gpus(inspection['Config']['Env'], gpu_list)
 
-        # Get user name, assuming that it will be the container will be mounted
-        # to either
-        info['User'] = get_user(inspection['Mounts'])
-
-        if GPUtil:
-            info['GpusUsed'], info['GpuCount'] = get_gpus(
-                inspection['Config']['Env'], gpu_list
-            )
-
-        info['Image'] = inspection['Config']['Image'].split(':')[0]
+        info = {
+            'ID': cont_id,
+            'Name': inspection['Name'][1:],
+            'CpusUsed': inspection['HostConfig']['CpusetCpus'],
+            'CpuCount': count_cpus(inspection['HostConfig']['CpusetCpus']),
+            'User': get_user(inspection['Mounts']),
+            'GpusUsed': gpus_used,
+            'GpuCount': gpu_count,
+            'Image': inspection['Config']['Image'].split(':')[0]
+        }
 
         out_list.append(info)
     return out_list
@@ -151,8 +143,7 @@ def output(info):
         names.append(len(container['Name']))
         cpus_used.append(len(container['CpusUsed']))
         users.append(len(container['User']))
-        if GPUtil:
-            gpus_used.append(len(container['GpusUsed']))
+        gpus_used.append(len(container['GpusUsed']))
         images.append(len(container['Image']))
 
     string_form = "{:<12} {:<"
@@ -164,16 +155,12 @@ def output(info):
     string_form += "} {:>"
     string_form += str(max(cpus_used))
     string_form += "} {:>9"
-    if GPUtil:
-        string_form += "} {:>"
-        string_form += str(max(gpus_used) + 1)
-        string_form += "} {:>9"
-    string_form += "}"
+    string_form += "} {:>"
+    string_form += str(max(gpus_used) + 1)
+    string_form += "} {:>9}"
 
-    headers = ['ID', "Name", "User", "Image", "CPUs Used", "CPU Count"]
-
-    if GPUtil:
-        headers += ["GPUs Used", "GPU Count"]
+    headers = ['ID', "Name", "User", "Image", "CPUs Used", "CPU Count",
+               "GPUs Used", "GPU Count"]
 
     print("\033[47;30m" + string_form.format(*headers) + "\033[49;39m")
 
@@ -185,10 +172,9 @@ def output(info):
             container['Image'],
             container['CpusUsed'],
             container['CpuCount'],
+            container['GpusUsed'],
+            container['GpuCount']
         ]
-
-        if GPUtil:
-            data += [container['GpusUsed'], container['GpuCount']]
 
         print("" + string_form.format(*data))
     print('')
@@ -196,7 +182,7 @@ def output(info):
 
 def container_inspect():
     container_ids = get_docker_ids()
-    gpu_list = GPUtil.getGPUs() if GPUtil else []
+    gpu_list = getGPUs()
     info = inspect_containers(container_ids, gpu_list)
     output(info)
 

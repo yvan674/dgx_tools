@@ -8,7 +8,6 @@ Author:
 Created on:
     January 16, 2020
 """
-
 from subprocess import run
 from datetime import datetime
 
