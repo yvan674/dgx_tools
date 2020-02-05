@@ -194,8 +194,12 @@ def output(info):
     print('')
 
 
-if __name__ == '__main__':
+def container_inspect():
     container_ids = get_docker_ids()
     gpu_list = GPUtil.getGPUs() if GPUtil else []
     info = inspect_containers(container_ids, gpu_list)
     output(info)
+
+
+if __name__ == '__main__':
+    container_inspect()

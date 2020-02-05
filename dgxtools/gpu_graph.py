@@ -333,7 +333,7 @@ class GpuGraph:
         self.sizes = sizes
 
 
-if __name__ == '__main__':
+def gpu_graph():
     args = parse_argument()
     try:
         # Initialize curses
@@ -366,3 +366,7 @@ if __name__ == '__main__':
         curses.echo()
         curses.nocbreak()
         curses.endwin()
+
+
+if __name__ == '__main__':
+    gpu_graph()

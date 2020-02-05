@@ -13,7 +13,7 @@ from subprocess import run
 from datetime import datetime
 
 
-def main():
+def sgpu():
     # Capture stream from running the scontrol command
     results = run(["scontrol", "show", "job"], capture_output=True, text=True)
 
@@ -129,4 +129,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    sgpu()
