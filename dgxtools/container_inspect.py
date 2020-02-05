@@ -11,12 +11,7 @@ Created on:
 """
 from subprocess import check_output
 import json
-try:
-    import GPUtil
-except ImportError:
-    print("Warning: GPUtil not found. GPU information will not be displayed."
-          "\n")
-    GPUtil = None
+from .gpu import getGPUs
 
 
 def get_docker_ids():
@@ -196,7 +191,7 @@ def output(info):
 
 def container_inspect():
     container_ids = get_docker_ids()
-    gpu_list = GPUtil.getGPUs() if GPUtil else []
+    gpu_list = getGPUs()
     info = inspect_containers(container_ids, gpu_list)
     output(info)
 
