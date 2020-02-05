@@ -1,0 +1,5 @@
+#!/usr/bin/python3
+from dgxtools.container_inspect import container_inspect
+
+
+container_inspect()

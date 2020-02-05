@@ -19,5 +19,8 @@ setup(name='dgxtools',
       author_email='y_satyawan@hotmail.com',
       license='MIT',
       packages=['dgxtools'],
+      scripts=['bin/sgpu',
+               'bin/container-inspect,'
+               'bin/gpu-graph'],
       install_requires=['GPUtil'],
       zip_safe=False)

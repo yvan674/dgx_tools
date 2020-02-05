@@ -1,0 +1,5 @@
+#!/usr/bin/python3
+from dgxtools.gpu_graph import gpu_graph
+
+
+gpu_graph()
