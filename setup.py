@@ -20,6 +20,6 @@ setup(name='dgxtools',
       license='MIT',
       packages=['dgxtools'],
       scripts=['bin/sgpu',
-               'bin/container-inspect,'
+               'bin/container-inspect',
                'bin/gpu-graph'],
       zip_safe=False)
