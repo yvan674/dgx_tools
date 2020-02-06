@@ -15,7 +15,43 @@ from math import ceil, floor
 import argparse
 from threading import Timer
 from sys import exit
-from .gpu import getGPUs
+from subprocess import Popen, PIPE
+import os
+
+
+def safe_float_cast(str_number):
+    try:
+        number = float(str_number)
+    except ValueError:
+        number = float('nan')
+    return number
+
+
+def get_gpus():
+    # Call the nvidia-smi tool
+    try:
+        p = Popen(['nvidia-smi',
+                   '--query-gpu=utilization.gpu,memory.total,memory.used,name',
+                   '--format=csv,noheader,nounits'],
+                  stdout=PIPE)
+        stdout, stderror = p.communicate()
+    except FileNotFoundError:
+        return []
+    output = stdout.decode('UTF-8')
+    output = output.split(os.linesep)
+
+    gpus = []
+
+    for line in output[:-1]:
+        vals = line.split(', ')
+        gpu_state = {
+            "load": safe_float_cast(vals[0]) / 100,
+            "memory_total": safe_float_cast(vals[1]),
+            "memory_used": safe_float_cast(vals[2]),
+            "name": vals[3]
+        }
+        gpus.append(gpu_state)
+    return gpus
 
 
 def parse_argument():
@@ -29,14 +65,16 @@ def parse_argument():
 
 
 class GpuGraph:
-    def __init__(self, stdscr, interval=1):
+    def __init__(self, stdscr, colors, interval=1):
         """Creates a GpuGraph Instance, which visualizes gpu usage as graphs.
 
         Visualizes GPU usage as ASCII graphs within the terminal window using
         curses.
 
         :param stdscr: the current stdscr instance from curses
+        :param colors: whether or not to use colors.
         :param interval: how often to update the screen in seconds
+        :type colors: bool
         :type interval: int or float
 
         :returns: a GpuGraph object
@@ -44,13 +82,13 @@ class GpuGraph:
         """
         self.stdscr = stdscr
         self.interval = interval
-        self.gpus = getGPUs()
+        self.gpus = get_gpus()
         self.num_gpus = len(self.gpus)
         assert self.num_gpus > 0, "No GPUs found"
 
         self.val_utilizations = []
-        self.mem_utilizations = [{'gpu_total': gpu.memoryTotal,
-                                  'gpu_usage': gpu.memoryUsed}
+        self.mem_utilizations = [{'gpu_total': gpu['memory_total'],
+                                  'gpu_usage': gpu['memory_used']}
                                  for gpu in self.gpus]
         self.windows = []
         self.sizes = None
@@ -58,6 +96,8 @@ class GpuGraph:
 
         self.redraw = True
         self.cont = True
+
+        self.colors = colors
 
     def run(self):
         # Clear screen
@@ -85,11 +125,11 @@ class GpuGraph:
             self.redraw = False
 
         # Now run the plotting and stuff
-        self.gpus = getGPUs()
+        self.gpus = get_gpus()
         for i in range(self.num_gpus):
             # Get utilizations
-            self.val_utilizations[i].append(self.gpus[i].load * 100)
-            self.mem_utilizations[i]['gpu_usage'] = self.gpus[i].memoryUsed
+            self.val_utilizations[i].append(self.gpus[i]['load'] * 100)
+            self.mem_utilizations[i]['gpu_usage'] = self.gpus[i]['memory_used']
 
             # Actually draw the windows
             self.draw_utilization_plot(i)
@@ -197,8 +237,10 @@ class GpuGraph:
             win = newwin(size['nlines'], size['ncols'],
                          size['begin_y'], size['begin_x'])
             win.clear()
+            win.attrset(curses.color_pair(9))
             win.border()
-            win.addstr(0, 2, "GPU {}: {}".format(i, self.gpus[i].name))
+            win.addstr(0, 2, "GPU {}: {}".format(i, self.gpus[i]['name']))
+            win.attrset(curses.color_pair(0))
             win.noutrefresh()
             windows.append(win)
             val_utilizations.append([0, 0])
@@ -225,8 +267,21 @@ class GpuGraph:
                                         'format': '{:3.0f}%',
                                         'offset': 3})
 
+        top_10 = round(len(res) / 10)
+
         for i, line in enumerate(res):
-            window.addstr(i, 0, line)
+            if self.colors:
+                axis_color = curses.color_pair(7)
+                if i <= top_10:
+                    line_color = curses.color_pair(10)
+                else:
+                    line_color = curses.color_pair(9)
+            else:
+                axis_color = None
+                line_color = None
+
+            window.addstr(i, 0, line[0:6], axis_color)
+            window.addstr(i, 6, line[6:], line_color)
 
         window.noutrefresh()
 
@@ -242,8 +297,8 @@ class GpuGraph:
         h, w = window.getmaxyx()
 
         # Clear out rows
-        for i in range(h - 3, -1, -1):
-            window.addstr(i, 0, ' ' * w)
+        for y_pos in range(h - 3, -1, -1):
+            window.addstr(y_pos, 0, ' ' * w)
 
         gpu_usage = self.mem_utilizations[i]['gpu_usage']
         gpu_total = self.mem_utilizations[i]['gpu_total']
@@ -251,24 +306,47 @@ class GpuGraph:
         # Calculate number of blocks to use. Each row can either be 1 or 2
         # blocks.
         blocks = round(gpu_usage / gpu_total * (h + h - 2))
+
+        top_10 = round((h - 1) / 10)
         # If this requires a half block, the value will be odd
         full_rows = floor(blocks / 2)
         half_row = False if blocks % 2 == 0 else True
 
-        # Draw the label
-        value = '{:5.0f}'.format(gpu_usage)
-        # First, center it
-        start_pos = int((w / 2)) - int((len(value) / 2))
-        window.addstr(h - 2, start_pos, value)
-        # Now draw in the rows
+        # Set value and value colors, if colors is available
+        value = '{:^5.0f}'.format(gpu_usage)
+        if self.colors:
+            if full_rows + half_row > top_10 * 9:
+                value_color = curses.color_pair(10)
+            else:
+                value_color = curses.color_pair(9)
+        else:
+            value_color = None
+
+        # Then draw the memory used value
+        window.addstr(h - 2, 0, value, value_color)
+
+        # Now set the default bar colors.
+        if self.colors:
+            bar_color = curses.color_pair(9)
+        else:
+            bar_color = None
+
+        # Now draw in the rows. Start from the bottom.
         for i in range(h - 3, -1, -1):
+            # Check to see if we've reached top 10% yet.
+            if self.colors and i <= top_10:
+                bar_color = curses.color_pair(10)
+
+            if gpu_usage == 0:
+                window.addstr(i, 0, '_' * w, bar_color)
+                break
             if full_rows == 0 and not half_row:
                 break
             if full_rows != 0:
-                window.addstr(i, 0, '█' * w)
+                window.addstr(i, 0, '█' * w, bar_color)
                 full_rows -= 1
             elif half_row:
-                window.addstr(i, 0, '▄' * w)
+                window.addstr(i, 0, '▄' * w, bar_color)
                 half_row = False
 
         window.noutrefresh()
@@ -346,14 +424,18 @@ def gpu_graph():
 
         try:
             curses.start_color()
+            curses.use_default_colors()
+            for i in range(0, 17):
+                curses.init_pair(i + 1, i, -1)
+            colors = True
         except curses.error:
             # Ignore and accept colorless
-            pass
+            colors = False
 
         if args.interval:
-            graph = GpuGraph(stdscr, args.interval)
+            graph = GpuGraph(stdscr, colors, args.interval)
         else:
-            graph = GpuGraph(stdscr)
+            graph = GpuGraph(stdscr, colors)
         graph.run()
     except KeyboardInterrupt:
         exit(0)
