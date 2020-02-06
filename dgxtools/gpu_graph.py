@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """GPU Usage.
 
 Outputs GPU usage in a Line chart along with memory usage in a bar chart.

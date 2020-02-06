@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """SGPU
 
 Show GPU allocations of each job queued by Slurm.
@@ -8,18 +9,21 @@ Author:
 Created on:
     January 16, 2020
 """
-from subprocess import run
+from subprocess import Popen, PIPE
 from datetime import datetime
+from os import linesep
 
 
 def sgpu():
     # Capture stream from running the scontrol command
-    results = run(["scontrol", "show", "job"], capture_output=True, text=True)
+    p = Popen(["scontrol", "show", "job"], stdout=PIPE)
+    stdout, stderror = p.communicate()
+    results = stdout.decode('UTF-8').split(linesep)
 
     jobs = []
     current_job = []
     # Parse the output into a list of lines
-    for line in results.stdout.split("\n"):
+    for line in results:
         if not line == "":
             current_job.append(line)
         else:
