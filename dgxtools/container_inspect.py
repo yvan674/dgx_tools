@@ -11,7 +11,31 @@ Created on:
 """
 from subprocess import check_output
 import json
-from .gpu import getGPUs
+from subprocess import Popen, PIPE
+import os
+
+
+def get_system_gpus():
+    # Call the nvidia-smi tool
+    try:
+        p = Popen(['nvidia-smi',
+                   '--query-gpu=index,uuid,',
+                   '--format=csv,noheader,nounits'],
+                  stdout=PIPE)
+        stdout, stderror = p.communicate()
+    except FileNotFoundError:
+        return []
+    stdout = stdout.decode('UTF-8').split(os.linesep)
+
+    gpus = []
+    for line in stdout[:-1]:
+        vals = line.split(', ')
+        gpu = {
+            "id": int(vals[0]),
+            "uuid": vals[1],
+        }
+        gpus.append(gpu)
+    return gpus
 
 
 def get_docker_ids():
@@ -19,7 +43,6 @@ def get_docker_ids():
 
     :returns: List of container IDs as strings
     :rtype: list
-
     """
     results = check_output(["docker", "ps", "-q"]).decode('ascii')
     return str(results).split('\n')[:-1]
@@ -76,8 +99,8 @@ def get_gpus(env, gpu_list):
 
     for uuid in uuids:
         for gpu in gpu_list:
-            if gpu.uuid == uuid:
-                used_ids.append(str(gpu.id))
+            if gpu['uuid'] == uuid:
+                used_ids.append(str(gpu['id']))
 
     return ', '.join(used_ids), str(len(used_ids))
 
@@ -182,7 +205,7 @@ def output(info):
 
 def container_inspect():
     container_ids = get_docker_ids()
-    gpu_list = getGPUs()
+    gpu_list = get_system_gpus()
     info = inspect_containers(container_ids, gpu_list)
     output(info)
 

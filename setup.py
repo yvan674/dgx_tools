@@ -22,5 +22,4 @@ setup(name='dgxtools',
       scripts=['bin/sgpu',
                'bin/container-inspect,'
                'bin/gpu-graph'],
-      install_requires=['GPUtil'],
       zip_safe=False)
