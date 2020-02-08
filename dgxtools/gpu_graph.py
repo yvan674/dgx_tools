@@ -161,13 +161,15 @@ class GpuGraph:
         # size is to small
         if self.sizes == -1:
             h, w = self.stdscr.getmaxyx()
-            assert w > 21, 'Terminal window is too small.'
+            start_y = int((w / 2) - 11)
+            start_x = int((h / 2) - 2)
+            assert w > 25, 'Terminal window is too small.'
 
             error_string = ['Window is too small.',
                             'Please make it bigger',
                             'or press "Q" to quit.']
             for i in range(len(error_string)):
-                self.stdscr.addstr(i, 0, error_string[i])
+                self.stdscr.addstr(start_x + i, start_y, error_string[i])
             self.stdscr.refresh()
             self.redraw = False
         else:
@@ -237,11 +239,16 @@ class GpuGraph:
         for i, size in enumerate(self.sizes):
             win = newwin(size['nlines'], size['ncols'],
                          size['begin_y'], size['begin_x'])
+            name = self.gpus[i]['name']
+            if len(name) > size['ncols'] - 11:
+                name = name[:size['ncols'] - 12] + "…"
             win.clear()
-            win.attrset(curses.color_pair(9))
+            if self.colors:
+                win.attrset(curses.color_pair(9))
             win.border()
-            win.addstr(0, 2, "GPU {}: {}".format(i, self.gpus[i]['name']))
-            win.attrset(curses.color_pair(0))
+            win.addstr(0, 2, "GPU {}: {}".format(i, name))
+            if self.colors:
+                win.attrset(curses.color_pair(0))
             win.noutrefresh()
             windows.append(win)
             val_utilizations.append([0, 0])
@@ -272,17 +279,17 @@ class GpuGraph:
 
         for i, line in enumerate(res):
             if self.colors:
-                axis_color = curses.color_pair(7)
+                axis_color = [curses.color_pair(7)]
                 if i <= top_10:
-                    line_color = curses.color_pair(10)
+                    line_color = [curses.color_pair(10)]
                 else:
-                    line_color = curses.color_pair(9)
+                    line_color = [curses.color_pair(9)]
             else:
-                axis_color = None
-                line_color = None
+                axis_color = []
+                line_color = []
 
-            window.addstr(i, 0, line[0:6], axis_color)
-            window.addstr(i, 6, line[6:], line_color)
+            window.addstr(i, 0, line[0:6], *axis_color)
+            window.addstr(i, 6, line[6:], *line_color)
 
         window.noutrefresh()
 
@@ -317,37 +324,37 @@ class GpuGraph:
         value = '{:^5.0f}'.format(gpu_usage)
         if self.colors:
             if full_rows + half_row > top_10 * 9:
-                value_color = curses.color_pair(10)
+                value_color = [curses.color_pair(10)]
             else:
-                value_color = curses.color_pair(9)
+                value_color = [curses.color_pair(9)]
         else:
-            value_color = None
+            value_color = []
 
         # Then draw the memory used value
-        window.addstr(h - 2, 0, value, value_color)
+        window.addstr(h - 2, 0, value, *value_color)
 
         # Now set the default bar colors.
         if self.colors:
-            bar_color = curses.color_pair(9)
+            bar_color = [curses.color_pair(9)]
         else:
-            bar_color = None
+            bar_color = []
 
         # Now draw in the rows. Start from the bottom.
         for i in range(h - 3, -1, -1):
             # Check to see if we've reached top 10% yet.
             if self.colors and i <= top_10:
-                bar_color = curses.color_pair(10)
+                bar_color = [curses.color_pair(10)]
 
             if gpu_usage == 0:
-                window.addstr(i, 0, '_' * w, bar_color)
+                window.addstr(i, 0, '_' * w, *bar_color)
                 break
             if full_rows == 0 and not half_row:
                 break
             if full_rows != 0:
-                window.addstr(i, 0, '█' * w, bar_color)
+                window.addstr(i, 0, '█' * w, *bar_color)
                 full_rows -= 1
             elif half_row:
-                window.addstr(i, 0, '▄' * w, bar_color)
+                window.addstr(i, 0, '▄' * w, *bar_color)
                 half_row = False
 
         window.noutrefresh()
@@ -369,12 +376,11 @@ class GpuGraph:
         h, w = self.stdscr.getmaxyx()
         w -= 1
         h -= 2
-
         # Figure out appropriate layout
         min_height = 10
-        min_width = 35
+        min_width = 18
 
-        partitions = 0
+        partitions = 1
 
         columns = 1
         rows = 1
@@ -395,7 +401,8 @@ class GpuGraph:
         height = floor(h / rows)
 
         if width < min_width or height < min_height:
-            return -1
+            self.sizes = -1
+            return
 
         for i in range(self.num_gpus):
             col = i % columns
