@@ -218,8 +218,8 @@ class GpuGraph:
         result[rows - y0][offset - 1] = '┼'  # first value
 
         for x in range(0, len(series) - 1):  # plot the line
-            y0 = int(round(series[x + 0] * ratio) - intmin2)
-            y1 = int(round(series[x + 1] * ratio) - intmin2)
+            y0 = int(floor(series[x + 0] * ratio) - intmin2)
+            y1 = int(floor(series[x + 1] * ratio) - intmin2)
             if y0 == y1:
                 result[rows - y0][x + offset] = '─'
             else:
@@ -275,12 +275,12 @@ class GpuGraph:
                                         'format': '{:3.0f}%',
                                         'offset': 3})
 
-        top_10 = round(len(res) / 10)
+        top_10 = floor(len(res) / 10)
 
-        for i, line in enumerate(res):
+        for j, line in enumerate(res):
             if self.colors:
                 axis_color = [curses.color_pair(7)]
-                if i <= top_10:
+                if j <= top_10:
                     line_color = [curses.color_pair(10)]
                 else:
                     line_color = [curses.color_pair(9)]
@@ -288,8 +288,11 @@ class GpuGraph:
                 axis_color = []
                 line_color = []
 
-            window.addstr(i, 0, line[0:6], *axis_color)
-            window.addstr(i, 6, line[6:], *line_color)
+            try:
+                window.addstr(j, 0, line[0:6], *axis_color)
+                window.addstr(j, 6, line[6:], *line_color)
+            except curses.error:
+                raise ValueError("window size: {}, {}, i: {}".format(h, w, j))
 
         window.noutrefresh()
 
@@ -313,9 +316,9 @@ class GpuGraph:
 
         # Calculate number of blocks to use. Each row can either be 1 or 2
         # blocks.
-        blocks = round(gpu_usage / gpu_total * (h + h - 2))
+        blocks = floor(gpu_usage / gpu_total * (h + h - 2))
 
-        top_10 = round((h - 1) / 10)
+        top_10 = floor((h - 1) / 10)
         # If this requires a half block, the value will be odd
         full_rows = floor(blocks / 2)
         half_row = False if blocks % 2 == 0 else True
@@ -397,8 +400,8 @@ class GpuGraph:
                 rows += 1
             partitions = rows * columns
 
-        width = floor(w / columns)
-        height = floor(h / rows)
+        width = floor(w / columns) - 1
+        height = floor(h / rows) - 1
 
         if width < min_width or height < min_height:
             self.sizes = -1
