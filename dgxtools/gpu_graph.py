@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# -*- coding: utf-8 -*-
 """GPU Usage.
 
 Outputs GPU usage in a Line chart along with memory usage in a bar chart.
@@ -176,61 +177,94 @@ class GpuGraph:
             self.redraw = True
 
     @staticmethod
-    def plot_line_chart(series: list or tuple, cfg: dict = None):
-        """Returns lines of an ascii plot.
+    def plot_line_chart(series, height, minimum=None, maximum=None,
+                        format=None):
+        """Returns a chart in ascii format.
 
-        Notes:
-            Possible cfg parameters are 'minimum', 'maximum', 'offset', 'height'
-            and 'format'.
+        This is a rewrite since existing methods annoyingly ignore the
+        "height" argument.
 
-        Example:
-            >>> series = [2, 5, 1, 3, 4, 1]
-            >>> print(GpuGraph.plot_line_chart(series, { 'height' :10 }))
+        :param series: Values of the series to be plotted. Must be a list of
+            floats or ints
+        :param height: Maximum height of the plot in number of lines.
+        :param minimum: Minimum value for the y-axis. If none is given, the
+            minimum of the series is used.
+        :param maximum: Maximum value for the y-axis. If none is given, the
+            maximum of the series is used.
+        :param format: String format (as defined in PEP 3101) to use to
+            show as the y-axis labels. Defaults {:>%d.0f} % len(str(maximum)).
+        :type series: list or tuple
+        :type height: int
+        :type minimum: float
+        :type maximum: float
+        :type format: str
+
+        :returns: A list of lines that when printed resemble a line chart.
+        :rtype: list
         """
-        cfg = cfg or {}
-        minimum = cfg['minimum'] if 'minimum' in cfg else min(series)
-        maximum = cfg['maximum'] if 'maximum' in cfg else max(series)
+        series_min = min(series)
+        series_max = max(series)
+        if minimum is not None:
+            assert minimum <= series_min
+        else:
+            minimum = series_min
+        if maximum is not None:
+            assert maximum >= series_max
+        else:
+            maximum = series_max
+
+        if format is None:
+            format = '{:>%d.0f} ' % len(str(maximum))
+
+        def get_row(val, height, ratio):
+            """Gets row to draw in given val, height, and ratio.
+
+            :rtype: int
+            """
+            return int((height - 1) - round(float(val) / float(ratio)))
 
         interval = abs(float(maximum) - float(minimum))
-        offset = cfg['offset'] if 'offset' in cfg else 3
-        height = cfg['height'] if 'height' in cfg else interval
-        ratio = height / interval
-        min2 = floor(float(minimum) * ratio)
-        max2 = ceil(float(maximum) * ratio)
+        ratio = interval / (height - 1)
 
-        intmin2 = int(min2)
-        intmax2 = int(max2)
+        # Initialize the label list and the series plot
+        y_axis_labels = []
+        for y_pos in range(height):
+            row = format.format(maximum - (ratio * y_pos))
 
-        rows = abs(intmax2 - intmin2)
-        width = len(series) + offset
-        placeholder = cfg['format'] if 'format' in cfg else '{:8.2f} '
-
-        result = [[' '] * width for _ in range(rows + 1)]
-
-        # axis and labels
-        for y in range(intmin2, intmax2 + 1):
-            label = placeholder.format(
-                float(maximum) - ((y - intmin2) * interval / rows))
-            result[y - intmin2][max(offset - len(label), 0)] = label
-            result[y - intmin2][offset - 1] = '┼' if y == 0 else '┤'
-
-        y0 = int(series[0] * ratio - min2)
-        result[rows - y0][offset - 1] = '┼'  # first value
-
-        for x in range(0, len(series) - 1):  # plot the line
-            y0 = int(floor(series[x + 0] * ratio) - intmin2)
-            y1 = int(floor(series[x + 1] * ratio) - intmin2)
-            if y0 == y1:
-                result[rows - y0][x + offset] = '─'
+            # Plot a cross at y=min and at the y-intercept
+            if y_pos == height - 1 or y_pos == get_row(series[0], height,
+                                                       ratio):
+                row += '┼'
             else:
-                result[rows - y1][x + offset] = '╰' if y0 > y1 else '╭'
-                result[rows - y0][x + offset] = '╮' if y0 > y1 else '╯'
-                start = min(y0, y1) + 1
-                end = max(y0, y1)
-                for y in range(start, end):
-                    result[rows - y][x + offset] = '│'
+                row += '┤'
+            y_axis_labels.append(row)
 
-        return [''.join(row) for row in result]
+        series_plots = [[' '] * len(series) for _ in range(height)]
+
+        # Plot everything else
+        for i, (prev_val, curr_val) in enumerate(zip(series[:-1], series[1:])):
+            y_prev = get_row(prev_val, height, ratio)
+            y_curr = get_row(curr_val, height, ratio)
+
+            # Draw a straight line if it's the same
+            if y_prev == y_curr:
+                series_plots[y_curr][i] = '─'
+
+            # Otherwise draw a vertical line and the end caps
+            else:
+                # The vertical lines
+                start = max(y_prev, y_curr) - 1
+                end = min(y_prev, y_curr)
+                for y in range(start, end, - 1):
+                    series_plots[y][i] = '│'
+
+                # The end caps
+                series_plots[y_prev][i] = '╮' if y_prev < y_curr else '╯'
+                series_plots[y_curr][i] = '╰' if y_prev < y_curr else '╭'
+
+        out_list = [label + ''.join(plot)
+                    for label, plot in zip(y_axis_labels, series_plots)]
+        return out_list
 
     def redraw_windows(self):
         """Redraws windows according to screen sizes given."""
@@ -269,11 +303,10 @@ class GpuGraph:
             self.val_utilizations[i].pop(0)
 
         res = self.plot_line_chart(self.val_utilizations[i],
-                                   cfg={'minimum': 0,
-                                        'maximum': 100,
-                                        'height': h - 1,
-                                        'format': '{:3.0f}%',
-                                        'offset': 3})
+                                   height=h - 1,
+                                   minimum=0,
+                                   maximum=100,
+                                   format='{:>3.0f}% ')
 
         top_10 = floor(len(res) / 10)
 
@@ -392,12 +425,33 @@ class GpuGraph:
             cut_height = floor(h / rows)
             cut_width = floor(w / columns)
 
-            if cut_width > cut_height:
-                # Then we cut vertically
-                columns += 1
+            diff_height_width = abs(cut_width - cut_height)
+            max_edge = max(cut_width, cut_height)
+
+            # If the difference between the two are less than 20%, prefer the
+            # partitioning that produces fewer empty spaces. If there isn't
+            # one, then use the usual method.
+            if diff_height_width < max_edge / 5:
+                partitions_if_add_col = rows * (columns + 1)
+                partitions_if_add_row = (rows + 1) * columns
+                remain_col = partitions_if_add_col - self.num_gpus
+                remain_row = partitions_if_add_row - self.num_gpus
+
+                if remain_row <= 0:
+                    rows += 1
+                elif remain_col <= 0:
+                    columns += 1
+                elif remain_row < remain_col:
+                    rows += 1
+                elif remain_col < remain_row:
+                    columns += 1
             else:
-                # Then we cut horizontally
-                rows += 1
+                if cut_width > cut_height:
+                    # Then we cut vertically
+                    columns += 1
+                else:
+                    # Then we cut horizontally
+                    rows += 1
             partitions = rows * columns
 
         width = floor(w / columns) - 1
