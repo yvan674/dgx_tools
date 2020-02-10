@@ -303,7 +303,7 @@ class GpuGraph:
             self.val_utilizations[i].pop(0)
 
         res = self.plot_line_chart(self.val_utilizations[i],
-                                   height=h - 1,
+                                   height=h,
                                    minimum=0,
                                    maximum=100,
                                    format='{:>3.0f}% ')
