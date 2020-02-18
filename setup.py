@@ -12,7 +12,7 @@ from setuptools import setup
 
 
 setup(name='dgxtools',
-      version='0.9',
+      version='0.10',
       description='A set of tools to help with DGX server tasks',
       url='https://github.com/yvan674/dgx_tools',
       author='Yvan Satyawan',

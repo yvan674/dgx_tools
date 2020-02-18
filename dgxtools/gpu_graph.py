@@ -94,6 +94,7 @@ class GpuGraph:
                                  for gpu in self.gpus]
         self.windows = []
         self.sizes = None
+        self.window_width = 0
         self.calculate_sizes()
 
         self.redraw = True
@@ -123,6 +124,7 @@ class GpuGraph:
             return
 
         if self.redraw:
+            self.draw_bottom_bar()
             self.redraw_windows()
             self.redraw = False
 
@@ -176,98 +178,29 @@ class GpuGraph:
         else:
             self.redraw = True
 
-    @staticmethod
-    def plot_line_chart(series, height, minimum=None, maximum=None,
-                        format=None):
-        """Returns a chart in ascii format.
+    def draw_bottom_bar(self):
+        """Draws the bottom info bar.
 
-        This is a rewrite since existing methods annoyingly ignore the
-        "height" argument.
-
-        :param series: Values of the series to be plotted. Must be a list of
-            floats or ints
-        :param height: Maximum height of the plot in number of lines.
-        :param minimum: Minimum value for the y-axis. If none is given, the
-            minimum of the series is used.
-        :param maximum: Maximum value for the y-axis. If none is given, the
-            maximum of the series is used.
-        :param format: String format (as defined in PEP 3101) to use to
-            show as the y-axis labels. Defaults {:>%d.0f} % len(str(maximum)).
-        :type series: list or tuple
-        :type height: int
-        :type minimum: float
-        :type maximum: float
-        :type format: str
-
-        :returns: A list of lines that when printed resemble a line chart.
-        :rtype: list
+        Simply draws q to quit and gpu-graph at the bottom of the screen.
         """
-        series_min = min(series)
-        series_max = max(series)
-        if minimum is not None:
-            assert minimum <= series_min
+        h = self.stdscr.getmaxyx()[0]
+        h -= 1
+        w = self.window_width
+        if self.colors:
+            key_color = [curses.color_pair(20)]
+            strip_color = [curses.color_pair(21)]
         else:
-            minimum = series_min
-        if maximum is not None:
-            assert maximum >= series_max
-        else:
-            maximum = series_max
+            key_color = []
+            strip_color = []
 
-        if format is None:
-            format = '{:>%d.0f} ' % len(str(maximum))
-
-        def get_row(val, height, ratio):
-            """Gets row to draw in given val, height, and ratio.
-
-            :rtype: int
-            """
-            return int((height - 1) - round(float(val) / float(ratio)))
-
-        interval = abs(float(maximum) - float(minimum))
-        ratio = interval / (height - 1)
-
-        # Initialize the label list and the series plot
-        y_axis_labels = []
-        for y_pos in range(height):
-            row = format.format(maximum - (ratio * y_pos))
-
-            # Plot a cross at y=min and at the y-intercept
-            if y_pos == height - 1 or y_pos == get_row(series[0], height,
-                                                       ratio):
-                row += '┼'
-            else:
-                row += '┤'
-            y_axis_labels.append(row)
-
-        series_plots = [[' '] * len(series) for _ in range(height)]
-
-        # Plot everything else
-        for i, (prev_val, curr_val) in enumerate(zip(series[:-1], series[1:])):
-            y_prev = get_row(prev_val, height, ratio)
-            y_curr = get_row(curr_val, height, ratio)
-
-            # Draw a straight line if it's the same
-            if y_prev == y_curr:
-                series_plots[y_curr][i] = '─'
-
-            # Otherwise draw a vertical line and the end caps
-            else:
-                # The vertical lines
-                start = max(y_prev, y_curr) - 1
-                end = min(y_prev, y_curr)
-                for y in range(start, end, - 1):
-                    series_plots[y][i] = '│'
-
-                # The end caps
-                series_plots[y_prev][i] = '╮' if y_prev < y_curr else '╯'
-                series_plots[y_curr][i] = '╰' if y_prev < y_curr else '╭'
-
-        out_list = [label + ''.join(plot)
-                    for label, plot in zip(y_axis_labels, series_plots)]
-        return out_list
+        self.stdscr.addstr(h, 0, ' Q', *key_color)
+        self.stdscr.addstr(h, 2, ' Quit', *strip_color)
+        self.stdscr.addstr(h, w - 10, 'gpu-graph', *strip_color)
+        self.stdscr.addstr(h, 7, ' ' * (w - 17), *strip_color)
+        self.stdscr.noutrefresh()
 
     def redraw_windows(self):
-        """Redraws windows according to screen sizes given."""
+        """Redraws windows according to screen sizes."""
         windows = []
         val_utilizations = []
         for i, size in enumerate(self.sizes):
@@ -474,7 +407,99 @@ class GpuGraph:
             sizes.append({'nlines': height, 'ncols': width, 'begin_y': y,
                           'begin_x': x})
 
+        self.window_width = sizes[-1]['begin_x'] + width + 1
+
         self.sizes = sizes
+
+    @staticmethod
+    def plot_line_chart(series, height, minimum=None, maximum=None,
+                        format=None):
+        """Returns a chart in ascii format.
+
+        This is a rewrite since existing methods annoyingly ignore the
+        "height" argument.
+
+        :param series: Values of the series to be plotted. Must be a list of
+            floats or ints
+        :param height: Maximum height of the plot in number of lines.
+        :param minimum: Minimum value for the y-axis. If none is given, the
+            minimum of the series is used.
+        :param maximum: Maximum value for the y-axis. If none is given, the
+            maximum of the series is used.
+        :param format: String format (as defined in PEP 3101) to use to
+            show as the y-axis labels. Defaults {:>%d.0f} % len(str(maximum)).
+        :type series: list or tuple
+        :type height: int
+        :type minimum: float
+        :type maximum: float
+        :type format: str
+
+        :returns: A list of lines that when printed resemble a line chart.
+        :rtype: list
+        """
+        series_min = min(series)
+        series_max = max(series)
+        if minimum is not None:
+            assert minimum <= series_min
+        else:
+            minimum = series_min
+        if maximum is not None:
+            assert maximum >= series_max
+        else:
+            maximum = series_max
+
+        if format is None:
+            format = '{:>%d.0f} ' % len(str(maximum))
+
+        def get_row(val, height, ratio):
+            """Gets row to draw in given val, height, and ratio.
+
+            :rtype: int
+            """
+            return int((height - 1) - round(float(val) / float(ratio)))
+
+        interval = abs(float(maximum) - float(minimum))
+        ratio = interval / (height - 1)
+
+        # Initialize the label list and the series plot
+        y_axis_labels = []
+        for y_pos in range(height):
+            row = format.format(maximum - (ratio * y_pos))
+
+            # Plot a cross at y=min and at the y-intercept
+            if y_pos == height - 1 or y_pos == get_row(series[0], height,
+                                                       ratio):
+                row += '┼'
+            else:
+                row += '┤'
+            y_axis_labels.append(row)
+
+        series_plots = [[' '] * len(series) for _ in range(height)]
+
+        # Plot everything else
+        for i, (prev_val, curr_val) in enumerate(zip(series[:-1], series[1:])):
+            y_prev = get_row(prev_val, height, ratio)
+            y_curr = get_row(curr_val, height, ratio)
+
+            # Draw a straight line if it's the same
+            if y_prev == y_curr:
+                series_plots[y_curr][i] = '─'
+
+            # Otherwise draw a vertical line and the end caps
+            else:
+                # The vertical lines
+                start = max(y_prev, y_curr) - 1
+                end = min(y_prev, y_curr)
+                for y in range(start, end, - 1):
+                    series_plots[y][i] = '│'
+
+                # The end caps
+                series_plots[y_prev][i] = '╮' if y_prev < y_curr else '╯'
+                series_plots[y_curr][i] = '╰' if y_prev < y_curr else '╭'
+
+        out_list = [label + ''.join(plot)
+                    for label, plot in zip(y_axis_labels, series_plots)]
+        return out_list
 
 
 def gpu_graph():
@@ -492,6 +517,9 @@ def gpu_graph():
             curses.use_default_colors()
             for i in range(0, 17):
                 curses.init_pair(i + 1, i, -1)
+
+            curses.init_pair(20, curses.COLOR_BLACK, curses.COLOR_WHITE)
+            curses.init_pair(21, curses.COLOR_WHITE, 8)
             colors = True
         except curses.error:
             # Ignore and accept colorless
