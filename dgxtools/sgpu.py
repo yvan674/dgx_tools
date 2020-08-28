@@ -12,40 +12,57 @@ Created on:
 from subprocess import Popen, PIPE
 from datetime import datetime
 from os import linesep
+from argparse import ArgumentParser
+import re
 
 
-def sgpu():
+def parse_args():
+    p = ArgumentParser(description='shows all jobs in the slurm queue and their'
+                                   ' stats, including gpu allocations')
+
+    p.add_argument('-a', '--all', action='store_true',
+                   help='runs this command on all dgx servers and shows the'
+                        'results.')
+
+    return p.parse_args()
+
+
+def sgpu(ssh=None):
+    """Reads from scontrol and parses the output.
+
+    Args:
+        ssh (str or None): If ssh is not None, then runs the scontrol command
+             from that address through ssh instead.
+    """
+    command = []
+    if ssh is not None:
+        command += ['ssh', '-o', 'StrictHostKeyChecking=no', ssh]
+    command += ['scontrol', 'show', 'job']
     # Capture stream from running the scontrol command
-    p = Popen(["scontrol", "show", "job"], stdout=PIPE)
+    p = Popen(command, stdout=PIPE)
     stdout, stderror = p.communicate()
     results = stdout.decode('UTF-8').split(linesep)
 
-    jobs = []
-    current_job = []
-    # Parse the output into a list of lines
-    for line in results:
-        if not line == "":
-            current_job.append(line)
-        else:
-            jobs.append(current_job)
-            current_job = []
+    if len(results) == 1:
+        print('')
+        return
 
-    # Turn the lists into dictionaries
-    raw_job_dicts = []
-    for job in jobs:
-        job_dict = dict()
-        for line in job:
-            line = line.split(' ')
-            for part in line:
-                if part:
-                    i = part.split('=')
-                    job_dict[i[0]] = i[1]
-        if job_dict:
-            raw_job_dicts.append(job_dict)
+    pattern = re.compile(r'(\S+)=(\S*)')
+    job_dicts = []
+    current_job = {}
+    for line in results:
+        matches = re.findall(pattern, line)
+        if len(matches) != 0:
+            for k, v in matches:
+                current_job[k] = v
+        else:
+            if len(current_job) != 0:
+                job_dicts.append(current_job)
+                current_job = {}
 
     # Extract only the keys that we care about
     parsed_jobs = []
-    for job in raw_job_dicts:
+    for job in job_dicts:
         if job['JobState'] == "RUNNING":
             temp = {}
             attributes = [
@@ -132,4 +149,13 @@ def sgpu():
 
 
 if __name__ == '__main__':
-    sgpu()
+    args = parse_args()
+    if args.all:
+        print('dgx.cloudlab.zhaw.ch:')
+        sgpu('dgx.cloudlab.zhaw.ch')
+        print('dgx2.cloudlab.zhaw.ch:')
+        sgpu('dgx2.cloudlab.zhaw.ch')
+        print('dgx3.cloudlab.zhaw.ch:')
+        sgpu('dgx3.cloudlab.zhaw.ch')
+    else:
+        sgpu()
