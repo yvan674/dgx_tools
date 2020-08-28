@@ -45,8 +45,12 @@ SGPU will print a table within the terminal window which shows the following inf
 
 The remaining available resources on the server is also shown.
 
+Additionally, all dgx systems can be check at once with the `-a` flag.
+
 ### Usage
 Run SGPU by using the command `sgpu`.
+
+Run `sgpu -a` to run the command on all DGX machines at once.
 
 ## Container Inspect
 Inspect docker containers and view how many GPUs are assigned to them and which user started them.
