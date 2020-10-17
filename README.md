@@ -72,4 +72,5 @@ Run Container Inspect using the command `container-inspect`.
 
 
 ## Attributions
-This work uses code from [asciichartpy](https://pypi.org/project/asciichartpy/), licensed under the MIT license.
+This work uses code from [asciichartpy](https://pypi.org/project/asciichartpy/) (
+Copyright © 2016 Igor Kroitor), licensed under the MIT license.
